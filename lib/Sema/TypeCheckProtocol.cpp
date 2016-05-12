@@ -179,6 +179,9 @@ namespace {
     /// The witness is less available than the requirement.
     Availability,
 
+    /// The requirement was marked explicitly unavailable.
+    Unavailable,
+
     /// The witness requires optional adjustments.
     OptionalityConflict,
 
@@ -1274,6 +1277,10 @@ checkWitness(Accessibility requiredAccess,
     return RequirementCheck(CheckKind::Availability, requiredAvailability);
   }
 
+  if (requirement->getAttrs().getUnavailable(TC.Context)) {
+    return RequirementCheck(CheckKind::Unavailable);
+  }
+
   // A non-failable initializer requirement cannot be satisfied
   // by a failable initializer.
   if (auto ctor = dyn_cast<ConstructorDecl>(requirement)) {
@@ -2052,8 +2059,7 @@ ConformanceChecker::resolveWitnessViaLookup(ValueDecl *requirement) {
                                     witness->getFullName(),
                                     proto->getDeclaredType(),
                                     requirement->getFullName());
-            fixDeclarationName(diag, cast<AbstractFunctionDecl>(witness),
-                               requirement->getFullName());
+            fixDeclarationName(diag, witness, requirement->getFullName());
           }
 
           tc.diagnose(requirement, diag::protocol_requirement_here,
@@ -2108,6 +2114,12 @@ ConformanceChecker::resolveWitnessViaLookup(ValueDecl *requirement) {
           tc.diagnose(conformance->getLoc(),
                       diag::availability_conformance_introduced_here);
         });
+      break;
+    }
+
+    case CheckKind::Unavailable: {
+      auto *attr = requirement->getAttrs().getUnavailable(TC.Context);
+      TC.diagnoseUnavailableOverride(witness, requirement, attr);
       break;
     }
 
